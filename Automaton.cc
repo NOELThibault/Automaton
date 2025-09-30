@@ -107,7 +107,10 @@ namespace fa
 	// O( 1 )
 	void Automaton::setStateInitial( int state )
 	{
-		initialStates.insert( state );
+		// If the state is not already in the set of states, we insert it
+		// The set data structure ensures we don't need to check if the state is already in
+		states.insert( state ); // O( 1 )
+		initialStates.insert( state ); // O( 1 )
 	}
 
 	// O( 1 )
@@ -119,7 +122,8 @@ namespace fa
 	// O( 1 )
 	void Automaton::setStateFinal( int state )
 	{
-		finalStates.insert( state );
+		states.insert( state ); // O( 1 )
+		finalStates.insert( state ); // O( 1 )
 	}
 
 	// O( 1 )
@@ -208,5 +212,44 @@ namespace fa
 	std::size_t Automaton::countTransitions() const
 	{
 		return transitionsCount;
+	}
+
+	// O( n + m + l ) with n the number of transitions, m the number of states and l the size of the alphabet
+	void Automaton::prettyPrint( std::ostream & os ) const
+	{
+		os << "Alphabet : {";
+		for( char letter : alphabet )
+		{
+			os << letter << "  ";
+		}
+		os << "}\n";
+
+		os << "States : ";
+		for( int state : states )
+		{
+			os << state << "  ";
+		}
+		os << "\nInital states : ";
+		for( int state : initialStates )
+		{
+			os << state << "  ";
+		}
+		os << "\nFinal states : ";
+		for( int state : finalStates )
+		{
+			os << state << "  ";
+		}
+
+		os << "\nTransitions : ";
+		for( auto [ source, transi ] : transitions )
+		{
+			for( auto [ destination, letters ] : transi )
+			{
+				for( char alpha : letters )
+				{
+					os << "\t" << source << " -> " << destination << " with " << alpha << "\n";
+				}
+			}
+		}
 	}
 }

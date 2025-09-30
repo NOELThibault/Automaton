@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <iosfwd>
+#include <iostream>
 #include <string>
 #include <set>
 #include <unordered_set>
