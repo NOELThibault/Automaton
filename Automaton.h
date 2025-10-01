@@ -133,7 +133,7 @@ namespace fa
 			/**
 			 * Print the automaton with respect to the DOT specification
 			 */
-			// void dotPrint(std::ostream& os) const;
+			void dotPrint( std::ostream& os ) const;
 
 			/**
 			 * Tell if the automaton has one or more epsilon-transition
@@ -240,15 +240,10 @@ namespace fa
 			std::unordered_set< int > initialStates;
 			// We use a set of inital states to be able to model a non-deterministic automaton
 
-			// On modélise les transitions de sorte que chaque sources possède une table de toutes ses destinations avec le symbole associé
-			// On utilise donc une map dans une map
-			// On choisi d'avoir la destination comme clé de la seconde map afin de potentiellement simplifier la suppression d'états, étant plus courantes que celles de symboles
-			// On prendra des unordered_map car le hash d'un int est connu et l'ordre n'importe pas : on a des opérations usuelles de complexité constante
-			// Afin de modéliser une relation de transitions, on utilise un unordered_set afin de maper à une destination plusieurs symboles différents
-			// On note qu'il n'est pas possible d'insérer plusieurs fois la même transitions
 			// States are mapped to a map of its transitions
 			// This transitions map a destination to a set of symbol possible to read from the source to the destination
 			// This set and both maps are unordered as the keys are int and char
+			// This structure can model non-deterministic automatons since it is possible to have a letter going multiple from 1 source to a destination
 			// This structure makes it impossible for the same transition to appear more than once
 			std::unordered_map< int, std::unordered_map< int, std::unordered_set<char> > > transitions;
 			// Saves the total count of transitions each change in order to skip calculations
