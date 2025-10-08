@@ -230,7 +230,7 @@ namespace fa
 		private:
 			// We use unordered_set in order to have a constant amortized complexity on insert, find and remove operations
 			// It also assures not having any doubles and ordering is useless to us anyway
-			// Worst case scenario ( O( n ) with n being the size of the container ) is when elements have the same hash
+			// Worst case scenario ( O( n ) with n being the size of the container ) is when elements have the same hash and therefore placed in the same bucket
 			// However, by using char, we should never get any collisions as the hash function to place elements in their bucket is perfectly distributed (the identity function suffices) 
 			std::unordered_set< char > alphabet;
 
@@ -241,11 +241,11 @@ namespace fa
 			// We use a set of inital states to be able to model a non-deterministic automaton
 
 			// States are mapped to a map of its transitions
-			// This transitions map a destination to a set of symbol possible to read from the source to the destination
+			// This transitions map a letter to a set of possible destinations
 			// This set and both maps are unordered as the keys are int and char
-			// This structure can model non-deterministic automatons since it is possible to have a letter going multiple from 1 source to a destination
+			// This structure can model non-deterministic automatons since it is possible to have a multiple destinations from 1 source and 1 letter
 			// This structure makes it impossible for the same transition to appear more than once
-			std::unordered_map< int, std::unordered_map< int, std::unordered_set<char> > > transitions;
+			std::unordered_map< int, std::unordered_map< char, std::unordered_set< int > > > transitions;
 			// Saves the total count of transitions each change in order to skip calculations
 			std::size_t transitionsCount;
 	};

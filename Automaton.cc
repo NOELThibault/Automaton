@@ -1,5 +1,8 @@
 #include "Automaton.h"
 #include <iterator>
+#include <assert.h>
+#include <vector>
+#include <utility>
 
 namespace fa
 {
@@ -18,36 +21,39 @@ namespace fa
 	// O( 1 )
 	bool Automaton::addSymbol( char symbol )
 	{
-		// Filter out all non-ASCII and non-graphable characters except Epsilon
-		if( ( !isascii( symbol ) || !isgraph( symbol ) ) && symbol != fa::Epsilon ) // O( 1 )
+		// Filter out all non-ASCII and non-graphable characters, Epsilon included
+		if( !isascii( symbol ) || !isgraph( symbol ) ) // O( 1 )
 			return false;
 
-		return alphabet.insert( symbol ).second; // O( 1 )
+		return alphabet.insert( symbol ).second; // O( 1 ) since our buckets has to be of size 1
 	}
 
 	// O( m ) with m being the total number of transitions
 	bool Automaton::removeSymbol( char symbol )
 	{
-		if( !alphabet.erase( symbol ) ) // O( 1 ) since erase(symbol) is a O( count(symbol) ) and symbol is unique in the set
+		if( !alphabet.erase( symbol ) ) // O( 1 ) since our buckets has to be of size 1
 			return false;
 
-		// There is a nested loop but it only iterates once through all the transitions
+		// We will save all the transitions to remove before actually removing them in order to not mess with the number of loop and risk infinite loops or segfaults
+		// There is a high probability that a solutions with only 1 loop exists
+		std::vector< std::pair< int, char > > toRemove;
+	
+		// There is a nested loop but it only iterates once through all the pairs of (source, letter) present in our transitions
 		for( auto [ source, transi ] : transitions )
 		{
-			for( auto [ dest, s ] : transi )
+			for( auto [ letter, dests ] : transi )
 			{
-				if( s.erase( symbol ) ) // O( 1 )
+				if( letter == symbol ) // O( 1 )
 				{
-					transitionsCount--;
-					// Clean up structure if there us an empty container
-					if( s.empty() ) // O( 1 )
-					{
-						transi.erase( dest ); // O( 1 ) since erase( dest ) is a O( count(dest) ) and dest is a unique key in the map
-						if( transi.empty() ) // O( 1 )
-							transitions.erase( source ); // O( 1 ) for the same reason
-					}
+					toRemove.push_back( std::pair{ source, letter } ); // O( 1 ) amortized (there is no data in the documentation about the worst case)
 				}
 			}
+		}
+		for( auto [ source, letter ] : toRemove )
+		{
+			// There are possibly multiple transitions from source with letter
+			transitionsCount -= transitions[ source ][ letter ].size(); // O( 1 ) since our buckets are of size 1
+			transitions[ source ].erase( letter ); // O( 1 )
 		}
 		return true;
 	}
@@ -70,7 +76,7 @@ namespace fa
 		return states.insert( state ).second;
 	}
 
-	// O( n ) with n equals the number of states being the source of a transitions, all of them in the worst case 
+	// O( n ) with n being the number of (source, letter) pairs existing in the transitions ,which equals the number total of transitions in the case of a deterministic automaton
 	bool Automaton::removeState( int state )
 	{
 		if( !states.erase( state ) ) // O( 1 )
@@ -78,16 +84,23 @@ namespace fa
 
 		initialStates.erase( state ); // O( 1 )
 		finalStates.erase( state ); // O( 1 )
-		// Loop an all the sources of a transition
+	
+		transitionsCount -= transitions.erase( state ); // O( 1 )
+	
+		// We save all the (source, letter) that have state as one of their destinations
+		std::vector< std::pair< int, char > > toRemove;
 		for( auto [ source, transi ] : transitions )
 		{
-			if( transi.erase( state ) ) // O( 1 )
+			for( auto [ letter, dests ] : transi )
 			{
-				transitionsCount--;
-				// Clean up the structure if there is an empty container
-				if( transi.empty() ) // O( 1 )
-					transitions.erase( source ); // O( 1 ) 
+				if( dests.count( state ) ) // O( 1 )
+					toRemove.push_back( std::pair{ source, letter } ); // O( 1 )
 			}
+		}
+		for( auto [ source, letter ] : toRemove )
+		{
+			transitions[ source ][ letter ].erase( state ); // O( 1 )
+			transitionsCount--;
 		}
 		return true;
 	}
@@ -107,10 +120,9 @@ namespace fa
 	// O( 1 )
 	void Automaton::setStateInitial( int state )
 	{
-		// If the state is not already in the set of states, we insert it
+		if( states.count( state ) ) // O( 1 )
+			initialStates.insert( state ); // O( 1 )
 		// The set data structure ensures we don't need to check if the state is already in
-		states.insert( state ); // O( 1 )
-		initialStates.insert( state ); // O( 1 )
 	}
 
 	// O( 1 )
@@ -122,8 +134,8 @@ namespace fa
 	// O( 1 )
 	void Automaton::setStateFinal( int state )
 	{
-		states.insert( state ); // O( 1 )
-		finalStates.insert( state ); // O( 1 )
+		if( states.count( state ) ) // O( 1 )
+			finalStates.insert( state ); // O( 1 )
 	}
 
 	// O( 1 )
@@ -135,40 +147,13 @@ namespace fa
 	// O( 1 )
 	bool Automaton::addTransition( int from, char alpha, int to )
 	{
-		// Filter out invalid parameters
-		if( !hasState( from ) || !hasState( to ) || !hasSymbol( alpha ) ) // O( 1 )
-		{
+		// Filter out invalid parameters ( Epsilon is a valid character, even if it cannot be in the alphabet )
+		if( !hasState( from ) || !hasState( to ) || ( !hasSymbol( alpha ) && alpha != fa::Epsilon ) ) // O( 1 )
 			return false;
-		}
 
-		auto iterFrom = transitions.find( from ); // O( 1 ) since from is unique in the map
-		if( iterFrom == transitions.end() ) // O( 1 )
-		{
-			std::unordered_set<char> s;
-			s.insert( alpha ); // O( 1 )
-
-			std::unordered_map< int, std::unordered_set<char> > transi;
-			transi.insert( std::pair{ to, s } ); // O( 1 )
-
-			transitions.insert( std::pair{ from, transi } ); // O( 1 )
-		}
-		else
-		{
-			auto iterTo = iterFrom->second.find( to ); // O( 1 )
-			if( iterTo == iterFrom->second.end() ) // O( 1 )
-			{
-				std::unordered_set<char> s;
-				s.insert( alpha ); // O( 1 )
-
-				iterFrom->second.insert( std::pair{ to, s } ); //O( 1 )
-			}
-			else
-			{
-				iterTo->second.insert( alpha ); // O( 1 )
-			}
-		}
 		transitionsCount++;
-		return true;
+		// The [] operator inserts elements if they are not already in
+		return transitions[ from ][ alpha ].insert( to ).second; // O( 1 ) even in worst case since the buckets are of size 1
 	}
 
 	// O( 1 )
@@ -178,19 +163,14 @@ namespace fa
 		if( iterFrom == transitions.end() ) // O( 1 )
 			return false;
 
-		auto iterTo = iterFrom->second.find( to ); // O( 1 )
-		if( iterTo == iterFrom->second.end() ) // O( 1 )
+		auto iterLetter = iterFrom->second.find( alpha ); // O( 1 )
+		if( iterLetter == iterFrom->second.end() ) // O( 1 )
 			return false;
 		
-		bool res = iterTo->second.erase( alpha ); // O( 1 )
-		// Clean up the structure if there are empty containers
-		if( iterTo->second.empty() )
-			iterFrom->second.erase( iterTo->first ); // O( 1 )
-		if( iterFrom->second.empty() )
-			transitions.erase( iterFrom->first ); // O( 1 )
-		
+		bool res = iterLetter->second.erase( to ); // O( 1 )
 		if( res )
-			transitionsCount--;		
+			transitionsCount--;
+
 		return res;
 	}
 
@@ -200,12 +180,14 @@ namespace fa
 		auto iterFrom = transitions.find( from ); // O( 1 )
 		if( iterFrom == transitions.end() ) // O( 1 )
 			return false;
-	
-		auto iterTo = iterFrom->second.find( to ); // O( 1 )
-		if( iterTo == iterFrom->second.end() ) // O( 1 )
+		
+		auto transi = iterFrom->second;
+		auto iterLetter = transi.find( alpha ); // O( 1 )
+		if( iterLetter == transi.end() ) // O( 1 )
 			return false;
 		
-		return iterTo->second.count( alpha ); // O( 1 )
+		std::unordered_set< int > dests = iterLetter->second;
+		return dests.count( to ); // O( 1 )
 	}
 
 	// O( 1 )
@@ -217,7 +199,7 @@ namespace fa
 	// O( n + m + l ) with n the number of transitions, m the number of states and l the size of the alphabet
 	void Automaton::prettyPrint( std::ostream & os ) const
 	{
-		os << "Alphabet : {";
+		os << "Alphabet : {  ";
 		for( char letter : alphabet )
 		{
 			os << letter << "  ";
@@ -240,7 +222,28 @@ namespace fa
 			os << state << "  ";
 		}
 
-		os << "\nTransitions : ";
+		os << "\nTransitions :\n";
+		for( auto [ source, transi ] : transitions )
+		{
+			for( auto [ letter, destinations ] : transi )
+			{
+				for( int dest : destinations )
+				{
+					os << "\t" << source << " -> " << dest << " with ";
+					if( letter == fa::Epsilon )
+						os << "Epsilon\n";
+					else
+						os << letter << '\n';
+				}
+			}
+		}
+		os << std::endl;
+	}
+
+	void Automaton::dotPrint( std::ostream & os ) const
+	{
+	}
+
 		for( auto [ source, transi ] : transitions )
 		{
 			for( auto [ destination, letters ] : transi )
