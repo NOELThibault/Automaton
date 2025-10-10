@@ -244,15 +244,213 @@ namespace fa
 	{
 	}
 
+	// O( m ) with m being the number of state source of a transition, every state in the worst case
+	bool Automaton::hasEpsilonTransition() const
+	{
+		assert( isValid() );
+
+		// Loop on every source
 		for( auto [ source, transi ] : transitions )
 		{
-			for( auto [ destination, letters ] : transi )
+			if( transi.find( fa::Epsilon ) != transi.end() ) // O( 1 )
+				return true;
+		}
+		return false;
+	}
+
+	// O( n ) with n being the number of (source, letter) pairs existing in the transitions, which equals the number total of transitions in the case of a deterministic automaton
+	bool Automaton::isDeterministic() const
+	{
+		assert( isValid() );
+
+		if( initialStates.size() != 1 ) // O( 1 )
+			return false;
+	
+		for( auto [ source, transi ] : transitions )
+		{
+			// For each sources, check if there is an Epsilon transition or if there are multiple destinations
+			for( auto [ letter, dests ] : transi )
 			{
-				for( char alpha : letters )
+				if( letter == fa::Epsilon || dests.size() > 1 ) // O( 1 )
+					return false;
+			}
+		}
+		return true;
+	}
+
+	// O( n ) with n being the total number of transitions
+	bool Automaton::isComplete() const
+	{
+		assert( isValid() );
+
+		// Skip heavy calculations if we know the automaton doesn't have enough transitions
+		if( transitionsCount < states.size() * alphabet.size() ) // O( 1 )
+			return false;
+		
+		// Loop all transitions
+		for( auto [ source, transi ] : transitions )
+		{
+			// For each source, check if the number of letters departing from source is equal to the size of the alphabet ( + 1 if there is Epsilon )
+			if( transi.size() != alphabet.size() + transi.count( fa::Epsilon ) ) // O( 1 )
+				return false;
+		}
+		return true;
+	}
+
+	// O( n * l ) with n being the number states and l being the size of the alphabet
+	Automaton Automaton::createComplete( const Automaton & automaton )
+	{
+		assert( automaton.isValid() );
+		Automaton res = automaton;
+
+		if( res.isComplete() ) // O( n ) with n being the total number of transitions
+			return res;
+
+		// We select a new number for the added state
+		int stateNumber = automaton.countStates() + 1;
+		// We suppose there is less than INT32_MAX states in the automaton ( the loop would be infinite )
+		while( !res.addState( stateNumber ) )
+			stateNumber++;
+
+		for( int source : automaton.states )
+		{
+			auto transi = res.transitions.find( source );
+			// If the state is source to no transitions
+			if( transi == res.transitions.end() )
+			{
+				for( char letter : automaton.alphabet )
 				{
-					os << "\t" << source << " -> " << destination << " with " << alpha << "\n";
+					res.transitions[ source ][ letter ].insert( stateNumber ); // O( 1 )
+					res.transitionsCount++;
+				}
+			}
+			else if( transi->second.size() != automaton.alphabet.size() + transi->second.count( fa::Epsilon ) ) // O( 1 )
+			{
+				// If the source state isn't complete, we map all missing letters to the new state
+				for( char letter : automaton.alphabet )
+				{
+					if( !transi->second.count( letter ) ) // O( 1 )
+					{
+						// The [] operator inserts elements if necessary
+						transi->second[ letter ].insert( stateNumber ); // O( 1 )
+						res.transitionsCount++;
+					}
 				}
 			}
 		}
+		// Don't forget to make the new state loop on itself
+		for( char letter : res.alphabet )
+		{
+			res.transitions[ stateNumber ][ letter ].insert( stateNumber ); // O( 1 )
+			res.transitionsCount++;
+		}
+		return res;
+	}
+
+	// O( n + m ) with n being the total number of states and m the number of transitions
+	Automaton Automaton::createComplement( const Automaton & automaton )
+	{
+		assert( automaton.isValid() );
+		Automaton res = automaton;
+
+		if( res.isDeterministic() && res.isComplete() ) // O( n ) with n being the number of transitions
+		{
+			for( int state : automaton.states )
+			{
+				if( automaton.isStateFinal( state ) ) // O( 1 )
+					res.finalStates.erase( state ); // O( 1 )
+				else
+					res.setStateFinal( state ); // O( 1 )
+			}
+		}
+		return res;
+	}
+
+	// O( n + l ) with n being the number of transitions and l being the number of initial and final states, every state in the worst case
+	Automaton Automaton::createMirror( const Automaton & automaton )
+	{
+		assert( automaton.isValid() );
+		Automaton res = automaton;
+
+		for( int state : automaton.initialStates )
+		{
+			if( !automaton.isStateFinal( state ) ) // O( 1 )
+			{
+				res.setStateFinal( state ); // O( 1 )
+				res.initialStates.erase( state ); // O( 1 )
+			}
+		}
+		for( int state : automaton.finalStates )
+		{
+			if( !automaton.isStateInitial( state ) ) // O( 1 )
+			{
+				res.setStateInitial( state ); // O( 1 )
+				res.finalStates.erase( state ); // O( 1 )
+			}
+		}
+
+		for( auto [ source, transi ] : automaton.transitions )
+		{
+			for( auto [ letter, dests ] : transi )
+			{
+				for( int destination : dests )
+				{
+					res.removeTransition( source, letter, destination ); // O( 1 )
+					res.addTransition( destination, letter, source ); // O( 1 )
+				}
+			}
+		}
+		return res;
+	}
+
+	// O( n * log n ) with n being the number of transitions from origin
+	std::set< int > Automaton::makeTransition( const std::set< int > & origin, char alpha ) const
+	{
+		assert( isValid() );
+		std::set< int > res;
+
+		for( int state : origin )
+		{
+			auto iterState = transitions.find( state ); // O( 1 )
+			if( iterState == transitions.end() ) // O( 1 )
+			continue;
+			
+			auto iterAlpha = iterState->second.find( alpha ); // O( 1 )
+			if( iterAlpha == iterState->second.end() ) // O( 1 )
+				continue;
+
+			// Loop on all transitions from the origin using alpha
+			for( int dest : iterAlpha->second )
+				res.insert( dest ); // O( log n ) with n being the number of resulting derivations, which equals the number of transitions from origin using alpha
+		}
+		return res;
+	}
+
+	// O( l * n * log n ) with l being the length of the word and n the number of transitions
+	std::set< int > Automaton::readString( const std::string & word ) const
+	{
+		assert( isValid() );
+		std::set< int > res;
+		// We can't convert unordered_set to set so we need to insert all the intial states ourselves
+		res.insert( initialStates.begin(), initialStates.end() ); // O( log n ) with n being the number of initial states
+
+		for( char alpha : word )
+		{
+			res = makeTransition( res, alpha ); // O( n * log n ) with n being the number of transitions from res
+		}
+		return res;
+	}
+
+	// O( l * n * log n ) with l being the length of the word and n the number of transitions
+	bool Automaton::match( const std::string & word ) const
+	{
+		std::set< int > s = readString( word );
+
+		for( int state : s )
+		{
+			if( isStateFinal( state ) ) // O( 1 )
+				return true;
+		}
+		return false;
 	}
 }
