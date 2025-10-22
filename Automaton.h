@@ -248,6 +248,9 @@ namespace fa
 			std::unordered_map< int, std::unordered_map< char, std::unordered_set< int > > > transitions;
 			// Saves the total count of transitions each change in order to skip calculations
 			std::size_t transitionsCount;
+
+			// Helper function
+			void depthSearch( std::unordered_map< int, bool > & visits, int state ) const;
 	};
 }
 

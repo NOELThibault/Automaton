@@ -1291,7 +1291,7 @@ TEST( AutomatonIntegratedCreateComplement, EndsWithB )
 	EXPECT_TRUE( c.match( "" ) );
 }
 
-TEST( AutomatonIntegratedCreateMirror, AnBn )
+TEST( AutomatonIntegratedCreateMirror, AnBm )
 {
 	fa::Automaton fa; // a^n b^m with n > 0 and m > 0
 	EXPECT_TRUE( fa.addState( 0 ) );
@@ -1320,6 +1320,196 @@ TEST( AutomatonIntegratedCreateMirror, AnBn )
 	EXPECT_FALSE( m.match( "" ) );
 	EXPECT_TRUE( m.match( "ba" ) );
 	EXPECT_TRUE( m.match( "bbbaaaa" ) );
+}
+
+TEST( AutomatonIsEmpty, EmptyMin )
+{
+	fa::Automaton fa;
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	fa.setStateInitial( 0 );
+
+	EXPECT_TRUE( fa.isLanguageEmpty() );
+	EXPECT_FALSE( fa.match( "" ) );
+	EXPECT_FALSE( fa.match( "a" ) );
+}
+TEST( AutomatonIsEmpty, Empty )
+{
+	fa::Automaton fa; // Would be (ab)* or a(ba)* if there was a final state
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	fa.setStateInitial( 0 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 1 ) );
+	EXPECT_TRUE( fa.addTransition( 1, 'b', 0 ) );
+
+	EXPECT_TRUE( fa.isLanguageEmpty() );
+	EXPECT_FALSE( fa.match( "" ) );
+	EXPECT_FALSE( fa.match( "ab" ) );
+	EXPECT_FALSE( fa.match( "aba" ) );
+}
+TEST( AutomatonIsEmpty, Unity )
+{
+	fa::Automaton fa;
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	fa.setStateInitial( 0 );
+	fa.setStateFinal( 0 );
+
+	EXPECT_FALSE( fa.isLanguageEmpty() );
+	EXPECT_TRUE( fa.match( "" ) );
+	EXPECT_FALSE( fa.match( "a" ) );
+}
+TEST( AutomatonIsEmpty, Deterministic )
+{
+	fa::Automaton fa; // a^n b^m with n > 0 and m >= 0
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	EXPECT_TRUE( fa.addState( 2 ) );
+	fa.setStateInitial( 0 );
+	fa.setStateFinal( 1 );
+	fa.setStateFinal( 2 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 1 ) );
+	EXPECT_TRUE( fa.addTransition( 1, 'a', 1 ) );
+	EXPECT_TRUE( fa.addTransition( 1, 'b', 2 ) );
+	EXPECT_TRUE( fa.addTransition( 2, 'b', 2 ) );
+
+	EXPECT_FALSE( fa.isLanguageEmpty() );
+}
+TEST( AutomatonIsEmpty, NonDeterministic )
+{
+	fa::Automaton fa; // (a + b)*b
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	fa.setStateInitial( 0 );
+	fa.setStateFinal( 1 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 1 ) );
+
+	EXPECT_FALSE( fa.isLanguageEmpty() );
+}
+
+TEST( AutomatonRemoveNonAccessible, NoInitial )
+{
+	fa::Automaton fa;
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+
+	fa.removeNonAccessibleStates();
+
+	EXPECT_FALSE( fa.hasState( 0 ) );
+	EXPECT_FALSE( fa.hasState( 1 ) );
+	EXPECT_EQ( fa.countStates(), (std::size_t)0 );
+
+	EXPECT_FALSE( fa.hasTransition( 0, 'a', 0 ) );
+	EXPECT_EQ( fa.countTransitions(), (std::size_t)0 );
+
+	EXPECT_TRUE( fa.hasSymbol( 'a' ) );
+	EXPECT_EQ( fa.countSymbols(), (std::size_t)1 );
+}
+TEST( AutomatonRemoveNonAccessible, FullAccessible )
+{
+	fa::Automaton fa; // (a + b)*b
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	fa.setStateInitial( 0 );
+	fa.setStateFinal( 1 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 1 ) );
+
+	fa.removeNonAccessibleStates();
+
+	EXPECT_EQ( fa.countStates(), (std::size_t)2 );
+	EXPECT_TRUE( fa.hasState( 0 ) );
+	EXPECT_TRUE( fa.hasState( 1 ) );
+	EXPECT_EQ( fa.countTransitions(), (std::size_t)3 );
+	EXPECT_TRUE( fa.hasTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.hasTransition( 0, 'b', 0 ) );
+	EXPECT_TRUE( fa.hasTransition( 0, 'b', 1 ) );
+}
+TEST( AutomatonRemoveNonAccessible, Simple )
+{
+	fa::Automaton fa; // (a + b)*b
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	EXPECT_TRUE( fa.addState( 2 ) );
+	EXPECT_TRUE( fa.addState( 3 ) );
+	fa.setStateInitial( 0 );
+	fa.setStateFinal( 1 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 1 ) );
+	EXPECT_TRUE( fa.addTransition( 1, 'b', 2 ) );
+	EXPECT_TRUE( fa.addTransition( 3, 'a', 3 ) );
+
+	fa.removeNonAccessibleStates();
+
+	EXPECT_TRUE( fa.hasState( 2 ) );
+	EXPECT_FALSE( fa.hasState( 3 ) );
+	EXPECT_EQ( fa.countStates(), (std::size_t)3 );
+
+	EXPECT_TRUE( fa.hasTransition( 1, 'b', 2 ) );
+	EXPECT_FALSE( fa.hasTransition( 3, 'a', 3 ) );
+	EXPECT_EQ( fa.countTransitions(), (std::size_t)4 );
+}
+
+TEST( AutomatonRemoveNonCoaccessible, Empty )
+{
+	fa::Automaton fa;
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	fa.setStateInitial( 0 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+
+	fa.removeNonCoAccessibleStates();
+
+	EXPECT_FALSE( fa.hasState( 0 ) );
+	EXPECT_FALSE( fa.hasState( 1 ) );
+	EXPECT_EQ( fa.countStates(), (std::size_t)0 );
+	EXPECT_FALSE( fa.hasTransition( 0, 'a', 0 ) );
+	EXPECT_EQ( fa.countTransitions(), (std::size_t)0 );
+}
+TEST( AutomatonRemoveNonCoaccessible, FullCoaccessible )
+{
+	fa::Automaton fa; // (a + b)*b
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+	fa.setStateInitial( 0 );
+	fa.setStateFinal( 1 );
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 1 ) );
+
+	fa.removeNonCoAccessibleStates();
+
+	EXPECT_TRUE( fa.hasState( 0 ) );
+	EXPECT_TRUE( fa.hasState( 1 ) );
+	EXPECT_EQ( fa.countStates(), (std::size_t)2 );
+
+	EXPECT_TRUE( fa.hasTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.hasTransition( 0, 'b', 0 ) );
+	EXPECT_TRUE( fa.hasTransition( 0, 'b', 1 ) );
+	EXPECT_EQ( fa.countTransitions(), (std::size_t)3 );
+
+	EXPECT_FALSE( fa.match( "" ) );
+	EXPECT_TRUE( fa.match( "b" ) );
+	EXPECT_TRUE( fa.match( "abbabab" ) );
 }
 
 int main( int argc, char ** argv )

@@ -444,6 +444,7 @@ namespace fa
 	// O( l * n * log n ) with l being the length of the word and n the number of transitions
 	bool Automaton::match( const std::string & word ) const
 	{
+		assert( isValid() );
 		std::set< int > s = readString( word );
 
 		for( int state : s )
@@ -452,5 +453,98 @@ namespace fa
 				return true;
 		}
 		return false;
+	}
+
+	// O( n ) with n being the number of states
+	void Automaton::depthSearch( std::unordered_map< int, bool > & visit, int state ) const
+	{
+		// Suppose the automaton is valid, state is in the automaton and visits has information on all states of the automaton
+		visit[ state ] = true; // O( 1 )
+		auto iter = transitions.find( state ); // O( 1 )
+		// If the state isn't part of the transitions map then we don't need to search further
+		if( iter == transitions.end() ) // O( 1 )
+			return;
+
+		for( auto [ letter, adjacents ] : iter->second )
+		{
+			for( int adj : adjacents )
+			{
+				if( !visit[ adj ] ) // O( 1 )
+					depthSearch( visit, adj );
+			}
+		}
+	}
+
+	// O ( n² ) with n being the number of states
+	bool Automaton::isLanguageEmpty() const
+	{
+		assert( isValid() );
+
+		for( int origin : initialStates )
+		{
+			std::unordered_map< int, bool > visit;
+			for( int state : states )
+				visit[ state ] = false; // O( 1 )
+
+			depthSearch( visit, origin ); // O( n ) with n being the number of states
+			for( int f : finalStates )
+			{
+				if( visit[ f ] ) // O( 1 )
+					return false;
+			}
+		}
+		return true;
+	}
+
+	// O( n² + n * m ) with n being the number of states and m the number of transitions
+	void Automaton::removeNonAccessibleStates()
+	{
+		assert( isValid() );
+
+		std::unordered_map< int, bool > visit;
+		for( int state : states )
+			visit[ state ] = false; // O( 1 )
+
+		for( int origin : initialStates )
+		{
+			depthSearch( visit, origin ); // O( n ) with n being the number of states
+		}
+
+		for( auto [ state, accessible ] : visit )
+		{
+			if( !accessible )
+				removeState( state ); // O( m ) with m being the number of transitions
+		}
+	}
+
+	// O( n² + n * m ) with n being the number of states and m the number of transitions
+	void Automaton::removeNonCoAccessibleStates()
+	{
+		assert( isValid() );
+
+		std::vector< int > toRemove;
+		for( int state : states )
+		{
+			std::unordered_map< int, bool > visit;
+			for( int state : states )
+				visit[ state ] = false; // O( 1 )
+
+			depthSearch( visit, state ); // O( n ) with n being the number of states
+
+			bool coaccessible = false;
+			for( int f : finalStates )
+			{
+				if( visit[ f ] ) // O( 1 )
+				{
+					coaccessible = true;
+					break;
+				}
+			}
+			if( !coaccessible )
+				toRemove.push_back( state ); // O( 1 )
+		}
+
+		for( int state : toRemove )
+			removeState( state ); // O( m ) with m being the number of transitions
 	}
 }
