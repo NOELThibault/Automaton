@@ -133,7 +133,7 @@ namespace fa
 			/**
 			 * Print the automaton with respect to the DOT specification
 			 */
-			void dotPrint( std::ostream& os ) const;
+			// void dotPrint( std::ostream& os ) const;
 
 			/**
 			 * Tell if the automaton has one or more epsilon-transition
@@ -226,6 +226,17 @@ namespace fa
 			 */
 			static Automaton createMinimalBrzozowski(const Automaton& other);
 
+			/**
+			 * Create an equivalent minimal automaton with the
+			 * Hopcroft algorithm
+			 */
+			// static Automaton createMinimalHopcroft(const Automaton& automaton);
+
+			/**
+			 * Create an equivalent automaton with the epsilon
+			 * transition removed
+			 */
+			// static Automaton createWithoutEpsilon(const Automaton& other);
 
 		private:
 			// We use unordered_set in order to have a constant amortized complexity on insert, find and remove operations
