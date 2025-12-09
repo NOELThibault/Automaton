@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <vector>
 #include <utility>
+#include <queue>
 
 namespace fa
 {
@@ -240,9 +241,9 @@ namespace fa
 		os << std::endl;
 	}
 
-	void Automaton::dotPrint( std::ostream & os ) const
-	{
-	}
+	// void Automaton::dotPrint( std::ostream & os ) const
+	// {
+	// }
 
 	// O( m ) with m being the number of state source of a transition, every state in the worst case
 	bool Automaton::hasEpsilonTransition() const
@@ -307,11 +308,11 @@ namespace fa
 			return res;
 
 		// We select a new number for the added state
-		int stateNumber = automaton.countStates() + 1;
-		// We suppose there is less than INT32_MAX states in the automaton ( the loop would be infinite )
-		while( !res.addState( stateNumber ) )
+		int stateNumber = -__INT32_MAX__;
+		// We suppose there is less than 2 * INT32_MAX states in the automaton
+		while( stateNumber < __INT32_MAX__ && !res.addState( stateNumber ) )
 			stateNumber++;
-
+	
 		for( int source : automaton.states )
 		{
 			auto transi = res.transitions.find( source );
@@ -347,21 +348,17 @@ namespace fa
 		return res;
 	}
 
-	// O( n + m ) with n being the total number of states and m the number of transitions
 	Automaton Automaton::createComplement( const Automaton & automaton )
 	{
 		assert( automaton.isValid() );
-		Automaton res = automaton;
+		Automaton res = fa::Automaton::createComplete ( fa::Automaton::createDeterministic( automaton ) );
 
-		if( res.isDeterministic() && res.isComplete() ) // O( n ) with n being the number of transitions
+		for( int state : automaton.states )
 		{
-			for( int state : automaton.states )
-			{
-				if( automaton.isStateFinal( state ) ) // O( 1 )
-					res.finalStates.erase( state ); // O( 1 )
-				else
-					res.setStateFinal( state ); // O( 1 )
-			}
+			if( automaton.isStateFinal( state ) ) // O( 1 )
+				res.finalStates.erase( state ); // O( 1 )
+			else
+				res.setStateFinal( state ); // O( 1 )
 		}
 		return res;
 	}
@@ -546,5 +543,178 @@ namespace fa
 
 		for( int state : toRemove )
 			removeState( state ); // O( m ) with m being the number of transitions
+	}
+
+	// O( l + ) with l being the number of symbol in both automata and 
+	Automaton Automaton::createIntersection( const Automaton & lhs, const Automaton & rhs )
+	{
+		assert( lhs.isValid() && rhs.isValid() );
+
+		Automaton res;
+
+		// The alphabet of the resulting automaton is the intersection of the 2 orignal alphabets
+		for( char symbol : lhs.alphabet )
+		{
+			if( rhs.hasSymbol( symbol ) ) // O( 1 )
+				res.addSymbol( symbol ); // O( 1 )
+		}
+		for( char symbol : rhs.alphabet )
+		{
+			if( lhs.hasSymbol( symbol ) ) // O( 1 )
+				// No need to check if the symbol is already inserted thanks to the insert method of std::unordered_set
+				res.addSymbol( symbol ); // O( 1 )
+		}
+		// If the intersection of both alphabets is empty, we add a letter to keep the validity of the result
+		// We can add any letter we want since the letter has no importance for the automaton (no transitions)
+		if( res.countSymbols() == 0 ) // O( 1 )
+			res.addSymbol( 'a' ); // O( 1 )
+
+
+		std::queue< std::tuple<int, int, int> > q; // State numbers following : (la, ra, res)
+		int newState = 0;
+		// Initial states of res
+		for( int initL : lhs.initialStates )
+		{
+			for( int initR : rhs.initialStates )
+			{
+				res.addState( newState ); // O( 1 )
+				q.push( std::tuple{ initL, initR, newState } );
+				if( lhs.isStateFinal( initL ) && rhs.isStateFinal( initR ) ) // O( 1 )
+					res.setStateFinal( newState ); // O( 1 )
+				newState++;
+			}
+		}
+		// No initial states means no intersection between initial states of lhs and rhs
+		if( res.countStates() == 0 ) // O( 1 )
+		{
+			// We add a state to keep the validity of the automaton
+			res.addState( 0 ); // O( 1 )
+			return res;
+		}
+		// Run through synchronized transitions
+		// while( !q.empty() )
+		// {
+		// 	std::tuple<int, int, int> current = q.front(); // O( 1 )
+		// 	q.pop();
+		// 	int lstate = std::get<0>( current );
+		// 	int rstate = std::get<1>( current );
+		// 	int state = std::get<2>( current );
+
+		// 	// Skip loop if there are no transitions from lstate or rstate
+		// 	if( lhs.transitions.count( lstate ) && rhs.transitions.count( rstate ) ) // O( 1 )
+		// 	{
+		// 		for( char letter : res.alphabet )
+		// 		{
+		// 			if( lhs.transitions.at( lstate ).count( letter ) && rhs.transitions.at( rstate ).count( letter ) ) // O( 1 )
+		// 			{
+		// 				int l = *lhs.transitions.at( lstate ).at( letter ).begin();
+		// 				int r = *rhs.transitions.at( rstate ).at( letter ).begin();
+		// 				if( res.addState( newState ) ) // O( 1 )
+		// 				{
+		// 					if( lhs.isStateFinal( l ) && rhs.isStateFinal( r ) ) // O( 1 )
+		// 						res.setStateFinal( newState ); // O( 1 )
+		// 					q.push( std::tuple{ l, r, newState } );
+		// 					newState++;
+		// 				}
+		// 				res.addTransition( state, letter, newState ); // O( 1 )
+		// 			}
+		// 		}
+		// 	}
+		// }
+		return res;
+	}
+
+	bool Automaton::hasEmptyIntersectionWith( const Automaton & other ) const
+	{
+		assert( isValid() && other.isValid() );
+		return createIntersection( *this, other ).isLanguageEmpty();
+	}
+
+	// Suppose other has no Epsilon transition
+	Automaton Automaton::createDeterministic( const Automaton & other )
+	{
+		assert( other.isValid() );
+		Automaton res;
+
+		res.alphabet = other.alphabet;
+		res.addState( 0 ); // O( 1 )
+		if( other.initialStates.size() == 0 ) // O( 1 )
+			return res;
+
+		std::queue< std::unordered_set< int > > q;
+		q.push( other.initialStates ); // O( 1 )
+		std::map< std::unordered_set< int >, int > stateMapping;
+		stateMapping[ other.initialStates ] = 0; // O( 1 ) since the map is empty
+	
+		while( !q.empty() )
+		{
+			std::unordered_set< int > current = q.front(); // O( 1 )
+			q.pop();
+			int stateNumber = stateMapping[ current ]; // O( log n ) with n being the number of states in res
+
+			// Check if current contains a final state
+			for( int s : current )
+			{
+				if( other.isStateFinal( s ) ) // O( 1 )
+				{
+					res.setStateFinal( stateNumber ); // O( 1 )
+					break;
+				}
+			}
+
+			for( char letter : other.alphabet )
+			{
+				std::unordered_set< int > dests;
+				// Compute the set of destinations from current using letter
+				for( int s : current )
+				{
+					auto iterState = other.transitions.find( s ); // O( 1 )
+					if( iterState == other.transitions.end() ) // O( 1 )
+						continue;
+					
+					auto iterLetter = iterState->second.find( letter ); // O( 1 )
+					if( iterLetter == iterState->second.end() ) // O( 1 )
+						continue;
+
+					// Loop on all transitions from the origin using letter
+					for( int dest : iterLetter->second )
+						dests.insert( dest ); // O( 1 )
+				}
+				if( dests.empty() ) // O( 1 )
+					continue;
+
+				// If this set of destinations is new, we add it to the automaton
+				if( stateMapping.find( dests ) == stateMapping.end() ) // O( log n ) with n being the number of states in res
+				{
+					int newStateNumber = res.countStates(); // O( 1 )
+					res.addState( newStateNumber ); // O( 1 )
+					stateMapping[ dests ] = newStateNumber; // O( 1 )
+					q.push( dests ); // O( 1 )
+				}
+				// Add the transition from stateNumber to the destination state
+				res.addTransition( stateNumber, letter, stateMapping[ dests ] ); // O( 1 )
+			}
+		}
+		return res;
+	}
+
+	bool Automaton::isIncludedIn( const Automaton & other ) const
+	{
+		assert( isValid() && other.isValid() );
+		return hasEmptyIntersectionWith( fa::Automaton::createComplement( other ) );
+	}
+	
+	Automaton Automaton::createMinimalMoore( const Automaton & other )
+	{
+		assert( other.isValid() );
+		Automaton res = fa::Automaton::createDeterministic( other );
+		return res;
+	}
+
+	Automaton Automaton::createMinimalBrzozowski( const Automaton & other )
+	{
+		assert( other.isValid() );
+		Automaton res = fa::Automaton::createDeterministic( fa::Automaton::createMirror( fa::Automaton::createDeterministic( fa::Automaton::createMirror( other ) ) ) );
+		return res;
 	}
 }

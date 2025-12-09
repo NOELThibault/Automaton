@@ -254,7 +254,7 @@ namespace fa
 			// States are mapped to a map of its transitions
 			// This transitions map a letter to a set of possible destinations
 			// This set and both maps are unordered as the keys are int and char
-			// This structure can model non-deterministic automatons since it is possible to have a multiple destinations from 1 source and 1 letter
+			// This structure can model non-deterministic automatons since it is possible to have multiple destinations from 1 source and 1 letter
 			// This structure makes it impossible for the same transition to appear more than once
 			std::unordered_map< int, std::unordered_map< char, std::unordered_set< int > > > transitions;
 			// Saves the total count of transitions each change in order to skip calculations
