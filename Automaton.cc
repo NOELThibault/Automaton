@@ -74,6 +74,8 @@ namespace fa
 	// O( 1 )
 	bool Automaton::addState( int state )
 	{
+		if( state < 0 )
+			return false;
 		return states.insert( state ).second;
 	}
 
@@ -152,9 +154,11 @@ namespace fa
 		if( !hasState( from ) || !hasState( to ) || ( !hasSymbol( alpha ) && alpha != fa::Epsilon ) ) // O( 1 )
 			return false;
 
-		transitionsCount++;
 		// The [] operator inserts elements if they are not already in
-		return transitions[ from ][ alpha ].insert( to ).second; // O( 1 ) even in worst case since the buckets are of size 1
+		bool res = transitions[ from ][ alpha ].insert( to ).second; // O( 1 ) even in worst case since the buckets are of size 1
+		if( res )
+			transitionsCount++;
+		return res;
 	}
 
 	// O( 1 )
@@ -254,7 +258,7 @@ namespace fa
 		for( auto [ source, transi ] : transitions )
 		{
 			if( transi.find( fa::Epsilon ) != transi.end() ) // O( 1 )
-				return true;
+				return transi[ fa::Epsilon ].size() > 0; // O( 1 )
 		}
 		return false;
 	}
@@ -308,8 +312,8 @@ namespace fa
 			return res;
 
 		// We select a new number for the added state
-		int stateNumber = -__INT32_MAX__;
-		// We suppose there is less than 2 * INT32_MAX states in the automaton
+		int stateNumber = 0;
+		// We suppose there is less than INT32_MAX states in the automaton
 		while( stateNumber < __INT32_MAX__ && !res.addState( stateNumber ) )
 			stateNumber++;
 	
@@ -512,6 +516,12 @@ namespace fa
 			if( !accessible )
 				removeState( state ); // O( m ) with m being the number of transitions
 		}
+
+		if( countStates() == 0 )
+		{
+			// We add a state to keep the validity of the automaton
+			addState( 0 ); // O( 1 )
+		}
 	}
 
 	// O( n² + n * m ) with n being the number of states and m the number of transitions
@@ -543,6 +553,12 @@ namespace fa
 
 		for( int state : toRemove )
 			removeState( state ); // O( m ) with m being the number of transitions
+
+		if( countStates() == 0 )
+		{
+			// We add a state to keep the validity of the automaton
+			addState( 0 ); // O( 1 )
+		}
 	}
 
 	// O( l + ) with l being the number of symbol in both automata and 
@@ -631,6 +647,7 @@ namespace fa
 	}
 
 	// Suppose other has no Epsilon transition
+	// O( n * m ) with n being the number of states in the resulting automaton and m the number of transitions in other
 	Automaton Automaton::createDeterministic( const Automaton & other )
 	{
 		assert( other.isValid() );
@@ -640,24 +657,30 @@ namespace fa
 		res.addState( 0 ); // O( 1 )
 		if( other.initialStates.size() == 0 ) // O( 1 )
 			return res;
-
-		std::queue< std::unordered_set< int > > q;
-		q.push( other.initialStates ); // O( 1 )
-		std::map< std::unordered_set< int >, int > stateMapping;
-		stateMapping[ other.initialStates ] = 0; // O( 1 ) since the map is empty
 	
+		std::queue< int > q;
+		std::unordered_map< int, std::unordered_set< int > > stateMapping;
+	
+		res.setStateInitial( 0 ); // O( 1 )
+		q.push( 0 ); // O( 1 )
+		stateMapping[ 0 ] = other.initialStates; // O( 1 )
+
+		std::vector< std::unordered_set< int > > created;
+		created.push_back( other.initialStates ); // O( 1 )
+		
 		while( !q.empty() )
 		{
-			std::unordered_set< int > current = q.front(); // O( 1 )
+			int current = q.front(); // O( 1 )
 			q.pop();
-			int stateNumber = stateMapping[ current ]; // O( log n ) with n being the number of states in res
+
+			std::unordered_set< int > currentStates = stateMapping[ current ]; // O( 1 )
 
 			// Check if current contains a final state
-			for( int s : current )
+			for( int s : currentStates )
 			{
 				if( other.isStateFinal( s ) ) // O( 1 )
 				{
-					res.setStateFinal( stateNumber ); // O( 1 )
+					res.setStateFinal( current ); // O( 1 )
 					break;
 				}
 			}
@@ -666,7 +689,7 @@ namespace fa
 			{
 				std::unordered_set< int > dests;
 				// Compute the set of destinations from current using letter
-				for( int s : current )
+				for( int s : currentStates )
 				{
 					auto iterState = other.transitions.find( s ); // O( 1 )
 					if( iterState == other.transitions.end() ) // O( 1 )
@@ -684,15 +707,25 @@ namespace fa
 					continue;
 
 				// If this set of destinations is new, we add it to the automaton
-				if( stateMapping.find( dests ) == stateMapping.end() ) // O( log n ) with n being the number of states in res
+				int newStateNumber = -1;
+				for( uint i = 0; i < created.size(); i++ )
 				{
-					int newStateNumber = res.countStates(); // O( 1 )
+					if( created[i] == dests ) // O( 1 )
+					{
+						newStateNumber = i;
+						break;
+					}
+				}
+				if( newStateNumber == -1 )
+				{
+					newStateNumber = res.countStates(); // O( 1 )
 					res.addState( newStateNumber ); // O( 1 )
-					stateMapping[ dests ] = newStateNumber; // O( 1 )
-					q.push( dests ); // O( 1 )
+					created.push_back( dests ); // O( 1 )
+					stateMapping[ newStateNumber ] = dests; // O( 1 )
+					q.push( newStateNumber ); // O( 1 )
 				}
 				// Add the transition from stateNumber to the destination state
-				res.addTransition( stateNumber, letter, stateMapping[ dests ] ); // O( 1 )
+				res.addTransition( current, letter, newStateNumber ); // O( 1 )
 			}
 		}
 		return res;
@@ -707,7 +740,7 @@ namespace fa
 	Automaton Automaton::createMinimalMoore( const Automaton & other )
 	{
 		assert( other.isValid() );
-		Automaton res = fa::Automaton::createDeterministic( other );
+		Automaton res = fa::Automaton::createComplete( fa::Automaton::createDeterministic( other ) );
 		return res;
 	}
 

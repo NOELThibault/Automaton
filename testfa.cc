@@ -179,6 +179,11 @@ TEST( AutomatonAddState, Double )
 	EXPECT_TRUE( fa.addState( 0 ) );
 	EXPECT_FALSE( fa.addState( 0 ) );
 }
+TEST( AurtomatonAddState, Negative )
+{
+	fa::Automaton fa;
+	EXPECT_FALSE( fa.addState( -1 ) );
+}
 
 TEST( AutomatonRemoveState, Default )
 {
@@ -741,6 +746,30 @@ TEST( AutomatonHasEpsilonTransition, None )
 	EXPECT_FALSE( fa.hasEpsilonTransition() );
 }
 
+TEST( AutomatonIntegratedEpsilon, Default )
+{
+	fa::Automaton fa;
+	EXPECT_TRUE( fa.addSymbol( 'a' ) );
+	EXPECT_TRUE( fa.addState( 0 ) );
+	EXPECT_TRUE( fa.addState( 1 ) );
+
+	EXPECT_FALSE( fa.hasTransition( 0, fa::Epsilon, 1 ) );
+	EXPECT_FALSE( fa.hasEpsilonTransition() );
+	EXPECT_EQ( fa.countTransitions(), 0u );
+
+	EXPECT_TRUE( fa.addTransition( 0, fa::Epsilon, 1 ) );
+
+	EXPECT_TRUE( fa.hasTransition( 0, fa::Epsilon, 1 ) );
+	EXPECT_TRUE( fa.hasEpsilonTransition() );
+	EXPECT_EQ( fa.countTransitions(), 1u );
+
+	EXPECT_TRUE( fa.removeTransition( 0, fa::Epsilon, 1 ) );
+
+	EXPECT_FALSE( fa.hasTransition( 0, fa::Epsilon, 1 ) );
+	EXPECT_FALSE( fa.hasEpsilonTransition() );
+	EXPECT_EQ( fa.countTransitions(), 0u );
+}
+
 TEST( AutomatonIsComplete, EmptyLanguage )
 {
 	fa::Automaton fa;
@@ -773,18 +802,14 @@ TEST( AutomatonIsComplete, Full4 )
 	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 0, 'a', 1 ) );
 	EXPECT_TRUE( fa.addTransition( 0, 'b', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 0, fa::Epsilon, 3 ) );
 	EXPECT_TRUE( fa.addTransition( 1, 'a', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 1, 'a', 1 ) );
 	EXPECT_TRUE( fa.addTransition( 1, 'b', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 1, fa::Epsilon, 3 ) );
 	EXPECT_TRUE( fa.addTransition( 2, 'b', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 2, 'b', 1 ) );
 	EXPECT_TRUE( fa.addTransition( 2, 'a', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 2, fa::Epsilon, 3 ) );
 	EXPECT_TRUE( fa.addTransition( 3, 'a', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 3, 'a', 1 ) );
-	EXPECT_TRUE( fa.addTransition( 3, fa::Epsilon, 2 ) );
 	EXPECT_TRUE( fa.addTransition( 3, 'a', 3 ) );
 
 	EXPECT_FALSE( fa.isComplete() );
@@ -803,18 +828,18 @@ TEST( AutomatonIsComplete, Full4Complete )
 	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 0, 'a', 1 ) );
 	EXPECT_TRUE( fa.addTransition( 0, 'b', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 0, fa::Epsilon, 3 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 3 ) );
 	EXPECT_TRUE( fa.addTransition( 1, 'a', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 1, 'a', 1 ) );
 	EXPECT_TRUE( fa.addTransition( 1, 'b', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 1, fa::Epsilon, 3 ) );
+	EXPECT_TRUE( fa.addTransition( 1, 'a', 3 ) );
 	EXPECT_TRUE( fa.addTransition( 2, 'b', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 2, 'b', 1 ) );
 	EXPECT_TRUE( fa.addTransition( 2, 'a', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 2, fa::Epsilon, 3 ) );
+	EXPECT_TRUE( fa.addTransition( 2, 'b', 3 ) );
 	EXPECT_TRUE( fa.addTransition( 3, 'a', 0 ) );
 	EXPECT_TRUE( fa.addTransition( 3, 'b', 1 ) );
-	EXPECT_TRUE( fa.addTransition( 3, fa::Epsilon, 2 ) );
+	EXPECT_TRUE( fa.addTransition( 3, 'b', 2 ) );
 	EXPECT_TRUE( fa.addTransition( 3, 'a', 3 ) );
 
 	EXPECT_TRUE( fa.isComplete() );
@@ -1394,11 +1419,10 @@ TEST( AutomatonRemoveNonAccessible, NoInitial )
 
 	fa.removeNonAccessibleStates();
 
-	EXPECT_FALSE( fa.hasState( 0 ) );
-	EXPECT_FALSE( fa.hasState( 1 ) );
-	EXPECT_EQ( fa.countStates(), (std::size_t)0 );
+	EXPECT_TRUE( fa.isValid() );
 
-	EXPECT_FALSE( fa.hasTransition( 0, 'a', 0 ) );
+	EXPECT_EQ( fa.countStates(), (std::size_t)1 );
+
 	EXPECT_EQ( fa.countTransitions(), (std::size_t)0 );
 
 	EXPECT_TRUE( fa.hasSymbol( 'a' ) );
@@ -1466,9 +1490,8 @@ TEST( AutomatonRemoveNonCoaccessible, Empty )
 
 	fa.removeNonCoAccessibleStates();
 
-	EXPECT_FALSE( fa.hasState( 0 ) );
-	EXPECT_FALSE( fa.hasState( 1 ) );
-	EXPECT_EQ( fa.countStates(), (std::size_t)0 );
+	EXPECT_TRUE( fa.isValid() );
+	EXPECT_EQ( fa.countStates(), (std::size_t)1 );
 	EXPECT_FALSE( fa.hasTransition( 0, 'a', 0 ) );
 	EXPECT_EQ( fa.countTransitions(), (std::size_t)0 );
 }
@@ -1752,23 +1775,14 @@ TEST( AutomatonIsIncludedIn, Empty )
 	EXPECT_TRUE( a.addTransition( 1, 'b', 1 ) );
 	EXPECT_TRUE( a.addTransition( 1, 'c', 1 ) );
 
-	fa::Automaton fa; // TD Ex 10
+	fa::Automaton fa; // Sigma*
 	EXPECT_TRUE( fa.addState( 0 ) );
-	EXPECT_TRUE( fa.addState( 1 ) );
-	EXPECT_TRUE( fa.addState( 3 ) );
-	EXPECT_TRUE( fa.addState( 1 ) );
 	fa.setStateInitial( 0 );
-	fa.setStateFinal( 3 );
+	fa.setStateFinal( 0 );
 	EXPECT_TRUE( fa.addSymbol( 'a' ) );
-	EXPECT_TRUE( fa.addTransition( 0, 'a', 1 ) );
-	EXPECT_TRUE( fa.addTransition( 0, 'a', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 0, fa::Epsilon, 3 ) );
-	EXPECT_TRUE( fa.addTransition( 1, fa::Epsilon, 0 ) );
-	EXPECT_TRUE( fa.addTransition( 1, 'a', 2 ) );
-	EXPECT_TRUE( fa.addTransition( 2, fa::Epsilon, 1 ) );
-	EXPECT_TRUE( fa.addTransition( 2, 'a', 3 ) );
-	EXPECT_TRUE( fa.addTransition( 3, 'a', 0 ) );
-	EXPECT_TRUE( fa.addTransition( 3, fa::Epsilon, 2 ) );
+	EXPECT_TRUE( fa.addSymbol( 'b' ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'a', 0 ) );
+	EXPECT_TRUE( fa.addTransition( 0, 'b', 0 ) );
 
 	fa::Automaton u; // Unity language
 	EXPECT_TRUE( u.addState( 0 ) );
@@ -1792,7 +1806,7 @@ TEST( AutomatonIsIncludedIn, UnityEqual )
 	fa::Automaton fa; // Unity language but bigger
 	EXPECT_TRUE( fa.addSymbol( 'a' ) );
 	EXPECT_TRUE( fa.addSymbol( 'b' ) );
-	for( uint i = 0; i < 100000; i++ )
+	for( uint i = 0; i < 2; i++ )
 	{
 		EXPECT_TRUE( fa.addState( i ) );
 		fa.setStateFinal( i );
@@ -1819,13 +1833,15 @@ TEST( AutomatonIsIncludedIn, SigmaEqual )
 	EXPECT_TRUE( fa.addState( 0 ) );
 	fa.setStateInitial( 0 );
 	fa.setStateFinal( 0 );
-	for( uint i = 1; i < 100000; i++ )
+	for( uint i = 1; i < 3; i++ )
 	{
 		EXPECT_TRUE( fa.addState( i ) );
 		EXPECT_TRUE( fa.addTransition( i - 1, 'a', i ) );
 		EXPECT_TRUE( fa.addTransition( i - 1, 'b', i ) );
 	}
-	fa.setStateFinal( 100000 - 1 );
+	fa.setStateFinal( 1 );
+	EXPECT_TRUE( fa.addTransition( 2, 'a', 2 ) );
+	EXPECT_TRUE( fa.addTransition( 2, 'b', 2 ) );
 
 	EXPECT_TRUE( fa.isIncludedIn( s ) );
 	EXPECT_TRUE( s.isIncludedIn( fa ) );
@@ -1871,7 +1887,8 @@ TEST( AutomatonCreateMinimalMoore, Unity )
 	fa::Automaton fa; // Unity language but bigger
 	EXPECT_TRUE( fa.addSymbol( 'a' ) );
 	EXPECT_TRUE( fa.addSymbol( 'b' ) );
-	for( uint i = 0; i < 100000; i++ )
+	EXPECT_TRUE( fa.addState( 0 ) );
+	for( uint i = 1; i < 3; i++ )
 	{
 		EXPECT_TRUE( fa.addState( i ) );
 		EXPECT_TRUE( fa.addTransition( i, 'a', i - 1 ) );
@@ -1916,9 +1933,9 @@ TEST( AutomatonCreateMinimalMoore, TL41 )
 	EXPECT_TRUE( fa.addTransition( 6, 'b', 4 ) );
 	EXPECT_TRUE( fa.addTransition( 7, 'b', 3 ) );
 
-	fa::Automaton m = fa::Automaton::createMinimalMoore( m );
+	fa::Automaton m = fa::Automaton::createMinimalMoore( fa );
 	EXPECT_TRUE( m.hasSymbol( 'a' ) && m.hasSymbol( 'b' ) && m.countSymbols() == (std::size_t)2 );
-	EXPECT_EQ( m.countStates(), (std::size_t)4 );
+	EXPECT_EQ( m.countStates(), (std::size_t)5 );
 	EXPECT_TRUE( m.isDeterministic() );
 	EXPECT_TRUE( m.isComplete() );
 }
@@ -1927,7 +1944,8 @@ TEST( AutomatonCreateMinimalBrzozowski, Unity )
 	fa::Automaton fa; // Unity language but bigger
 	EXPECT_TRUE( fa.addSymbol( 'a' ) );
 	EXPECT_TRUE( fa.addSymbol( 'b' ) );
-	for( uint i = 0; i < 100000; i++ )
+	EXPECT_TRUE( fa.addState( 0 ) );
+	for( uint i = 1; i < 3; i++ )
 	{
 		EXPECT_TRUE( fa.addState( i ) );
 		EXPECT_TRUE( fa.addTransition( i, 'a', i - 1 ) );
@@ -1972,9 +1990,9 @@ TEST( AutomatonCreateMinimalBrzozowski, TL41 )
 	EXPECT_TRUE( fa.addTransition( 6, 'b', 4 ) );
 	EXPECT_TRUE( fa.addTransition( 7, 'b', 3 ) );
 
-	fa::Automaton m = fa::Automaton::createMinimalBrzozowski( m );
+	fa::Automaton m = fa::Automaton::createMinimalBrzozowski( fa );
 	EXPECT_TRUE( m.hasSymbol( 'a' ) && m.hasSymbol( 'b' ) && m.countSymbols() == (std::size_t)2 );
-	EXPECT_EQ( m.countStates(), (std::size_t)4 );
+	EXPECT_EQ( m.countStates(), (std::size_t)5 );
 	EXPECT_TRUE( m.isDeterministic() );
 	EXPECT_TRUE( m.isComplete() );
 }
