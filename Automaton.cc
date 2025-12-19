@@ -268,7 +268,7 @@ namespace fa
 	{
 		assert( isValid() );
 
-		if( initialStates.size() != 1 ) // O( 1 )
+		if( initialStates.size() > 1 ) // O( 1 )
 			return false;
 	
 		for( auto [ source, transi ] : transitions )
@@ -352,14 +352,15 @@ namespace fa
 		return res;
 	}
 
+	// O( n * m * l ) with n being the number of states, m the number of transitions and l the size of the alphabet
 	Automaton Automaton::createComplement( const Automaton & automaton )
 	{
 		assert( automaton.isValid() );
-		Automaton res = fa::Automaton::createComplete ( fa::Automaton::createDeterministic( automaton ) );
+		Automaton res = fa::Automaton::createComplete( fa::Automaton::createDeterministic( automaton ) );
 
-		for( int state : automaton.states )
+		for( int state : res.states )
 		{
-			if( automaton.isStateFinal( state ) ) // O( 1 )
+			if( res.isStateFinal( state ) ) // O( 1 )
 				res.finalStates.erase( state ); // O( 1 )
 			else
 				res.setStateFinal( state ); // O( 1 )
@@ -521,6 +522,7 @@ namespace fa
 		{
 			// We add a state to keep the validity of the automaton
 			addState( 0 ); // O( 1 )
+			setStateInitial( 0 ); // O( 1 )
 		}
 	}
 
@@ -558,17 +560,15 @@ namespace fa
 		{
 			// We add a state to keep the validity of the automaton
 			addState( 0 ); // O( 1 )
+			setStateInitial( 0 ); // O( 1 )
 		}
 	}
 
-	// O( l + ) with l being the number of symbol in both automata and 
 	Automaton Automaton::createIntersection( const Automaton & lhs, const Automaton & rhs )
 	{
 		assert( lhs.isValid() && rhs.isValid() );
-
 		Automaton res;
-
-		// The alphabet of the resulting automaton is the intersection of the 2 orignal alphabets
+		// The alphabet of the resulting automaton is the intersection of the 2 original alphabets
 		for( char symbol : lhs.alphabet )
 		{
 			if( rhs.hasSymbol( symbol ) ) // O( 1 )
@@ -580,66 +580,107 @@ namespace fa
 				// No need to check if the symbol is already inserted thanks to the insert method of std::unordered_set
 				res.addSymbol( symbol ); // O( 1 )
 		}
-		// If the intersection of both alphabets is empty, we add a letter to keep the validity of the result
-		// We can add any letter we want since the letter has no importance for the automaton (no transitions)
+		// If the intersection of both alphabets is empty, it's either the empty automaton or unity automaton
 		if( res.countSymbols() == 0 ) // O( 1 )
+		{
 			res.addSymbol( 'a' ); // O( 1 )
-
-
-		std::queue< std::tuple<int, int, int> > q; // State numbers following : (la, ra, res)
-		int newState = 0;
-		// Initial states of res
-		for( int initL : lhs.initialStates )
-		{
-			for( int initR : rhs.initialStates )
-			{
-				res.addState( newState ); // O( 1 )
-				q.push( std::tuple{ initL, initR, newState } );
-				if( lhs.isStateFinal( initL ) && rhs.isStateFinal( initR ) ) // O( 1 )
-					res.setStateFinal( newState ); // O( 1 )
-				newState++;
-			}
-		}
-		// No initial states means no intersection between initial states of lhs and rhs
-		if( res.countStates() == 0 ) // O( 1 )
-		{
-			// We add a state to keep the validity of the automaton
 			res.addState( 0 ); // O( 1 )
+			res.setStateInitial( 0 ); // O( 1 )
+			if( lhs.match( "" ) && rhs.match( "" ) ) // O( n ) with n being the number of inital states in lhs and rhs
+				res.setStateFinal( 0 ); // O( 1 )
 			return res;
 		}
-		// Run through synchronized transitions
-		// while( !q.empty() )
-		// {
-		// 	std::tuple<int, int, int> current = q.front(); // O( 1 )
-		// 	q.pop();
-		// 	int lstate = std::get<0>( current );
-		// 	int rstate = std::get<1>( current );
-		// 	int state = std::get<2>( current );
 
-		// 	// Skip loop if there are no transitions from lstate or rstate
-		// 	if( lhs.transitions.count( lstate ) && rhs.transitions.count( rstate ) ) // O( 1 )
-		// 	{
-		// 		for( char letter : res.alphabet )
-		// 		{
-		// 			if( lhs.transitions.at( lstate ).count( letter ) && rhs.transitions.at( rstate ).count( letter ) ) // O( 1 )
-		// 			{
-		// 				int l = *lhs.transitions.at( lstate ).at( letter ).begin();
-		// 				int r = *rhs.transitions.at( rstate ).at( letter ).begin();
-		// 				if( res.addState( newState ) ) // O( 1 )
-		// 				{
-		// 					if( lhs.isStateFinal( l ) && rhs.isStateFinal( r ) ) // O( 1 )
-		// 						res.setStateFinal( newState ); // O( 1 )
-		// 					q.push( std::tuple{ l, r, newState } );
-		// 					newState++;
-		// 				}
-		// 				res.addTransition( state, letter, newState ); // O( 1 )
-		// 			}
-		// 		}
-		// 	}
-		// }
+		// If either automaton has no initial states, return empty automaton
+		if( lhs.initialStates.empty() || rhs.initialStates.empty() ) // O( 1 )
+			return res;
+
+		std::queue< int > q;
+		std::unordered_map< int, std::pair< int, int > > stateMapping;
+		std::vector< std::pair< int, int > > created;
+		
+		int stateCounter = 0;
+		
+		for( int lState : lhs.initialStates )
+		{
+			for( int rState : rhs.initialStates )
+			{
+				std::pair< int, int > statePair = { lState, rState };
+				res.addState( stateCounter ); // O( 1 )
+				res.setStateInitial( stateCounter ); // O( 1 )
+				stateMapping[ stateCounter ] = statePair; // O( 1 )
+				created.push_back( statePair ); // O( 1 )
+				q.push( stateCounter ); // O( 1 )
+				stateCounter++;
+			}
+		}
+		
+		while( !q.empty() )
+		{
+			int current = q.front(); // O( 1 )
+			q.pop();
+			std::pair< int, int > currentPair = stateMapping[ current ]; // O( 1 )
+			int lState = currentPair.first;
+			int rState = currentPair.second;
+			
+			if( lhs.isStateFinal( lState ) && rhs.isStateFinal( rState ) ) // O( 1 )
+			{
+				res.setStateFinal( current ); // O( 1 )
+			}
+			
+			for( char letter : res.alphabet )
+			{
+				auto iterLState = lhs.transitions.find( lState ); // O( 1 )
+				if( iterLState == lhs.transitions.end() ) // O( 1 )
+					continue;
+				auto iterLLetter = iterLState->second.find( letter ); // O( 1 )
+				if( iterLLetter == iterLState->second.end() ) // O( 1 )
+					continue;
+				
+				auto iterRState = rhs.transitions.find( rState ); // O( 1 )
+				if( iterRState == rhs.transitions.end() ) // O( 1 )
+					continue;
+				auto iterRLetter = iterRState->second.find( letter ); // O( 1 )
+				if( iterRLetter == iterRState->second.end() ) // O( 1 )
+					continue;
+				
+				for( int lDest : iterLLetter->second )
+				{
+					for( int rDest : iterRLetter->second )
+					{
+						std::pair< int, int > destPair = { lDest, rDest };
+						
+						// Check if this state pair already exists
+						int newStateNumber = -1;
+						for( uint i = 0; i < created.size(); i++ )
+						{
+							if( created[i] == destPair ) // O( 1 )
+							{
+								newStateNumber = i;
+								break;
+							}
+						}
+
+						// If this is a new state pair, add it
+						if( newStateNumber == -1 )
+						{
+							newStateNumber = stateCounter;
+							res.addState( newStateNumber ); // O( 1 )
+							stateMapping[ newStateNumber ] = destPair; // O( 1 )
+							created.push_back( destPair ); // O( 1 )
+							q.push( newStateNumber ); // O( 1 )
+							stateCounter++;
+						}
+
+						res.addTransition( current, letter, newStateNumber ); // O( 1 )
+					}
+				}
+			}
+		}
 		return res;
 	}
 
+	// O( (n * m)² ) with n being th number of states in the current automaton and m the number of states in other
 	bool Automaton::hasEmptyIntersectionWith( const Automaton & other ) const
 	{
 		assert( isValid() && other.isValid() );
@@ -731,23 +772,45 @@ namespace fa
 		return res;
 	}
 
+	// O( (n * m)² ) with n being th number of states in the current automaton and m the number of states in other
 	bool Automaton::isIncludedIn( const Automaton & other ) const
 	{
 		assert( isValid() && other.isValid() );
 		return hasEmptyIntersectionWith( fa::Automaton::createComplement( other ) );
 	}
-	
+
 	Automaton Automaton::createMinimalMoore( const Automaton & other )
 	{
 		assert( other.isValid() );
+		if( other.isLanguageEmpty() ) // O( n² ) with n being the number of states
+		{
+			Automaton emptyAutomaton;
+			emptyAutomaton.addSymbol( 'a' ); // O( 1 )
+			emptyAutomaton.addState( 0 ); // O( 1 )
+			emptyAutomaton.setStateInitial( 0 ); // O( 1 )
+			// Keep completeness of the result
+			emptyAutomaton.addTransition( 0, 'a', 0 ); // O( 1 )
+			return emptyAutomaton;
+		}
+
 		Automaton res = fa::Automaton::createComplete( fa::Automaton::createDeterministic( other ) );
 		return res;
 	}
-
-	Automaton Automaton::createMinimalBrzozowski( const Automaton & other )
-	{
-		assert( other.isValid() );
-		Automaton res = fa::Automaton::createDeterministic( fa::Automaton::createMirror( fa::Automaton::createDeterministic( fa::Automaton::createMirror( other ) ) ) );
-		return res;
-	}
+		// O( 2^n ) with n being the number of states in other
+		Automaton Automaton::createMinimalBrzozowski( const Automaton & other )
+		{
+			assert( other.isValid() );
+			Automaton res = fa::Automaton::createComplete( fa::Automaton::createDeterministic( fa::Automaton::createMirror( fa::Automaton::createDeterministic( fa::Automaton::createMirror( other ) ) ) ) );
+			if( res.isLanguageEmpty() ) // O( n² ) with n being the number of states
+			{
+				Automaton emptyAutomaton;
+				emptyAutomaton.addSymbol( 'a' ); // O( 1 )
+				emptyAutomaton.addState( 0 ); // O( 1 )
+				emptyAutomaton.setStateInitial( 0 ); // O( 1 )
+				// Keep completeness of the result
+				emptyAutomaton.addTransition( 0, 'a', 0 ); // O( 1 )
+				return emptyAutomaton;
+			}
+			return res;
+		}
 }
